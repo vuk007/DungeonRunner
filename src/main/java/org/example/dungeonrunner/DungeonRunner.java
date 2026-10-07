@@ -3,18 +3,15 @@ package org.example.dungeonrunner;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.scene.*;
-import javafx.scene.image.Image;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.*;
-import javafx.scene.text.Font;
-import javafx.scene.text.Text;
 import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Translate;
 import javafx.stage.Stage;
-import java.util.ArrayList;
-import java.util.List;
+
+import java.util.*;
 
 public class DungeonRunner extends Application {
 
@@ -23,6 +20,8 @@ public class DungeonRunner extends Application {
     public DungeonMap getMap() {
         return map;
     }
+    private HudManager hud;
+    private Minimap minimap;
     private boolean gameOver = false;
     private StackPane rootPane;
     private Player player;
@@ -31,11 +30,12 @@ public class DungeonRunner extends Application {
     private Group cameraMount;
     private PointLight torch;
     private AnimationTimer timer;
-    private int power=0;
-    private Group vreme;
     private List<Trap> traps = new ArrayList<>();
     private List<Key> keys = new ArrayList<>();
+    private List<Switch> switches = new ArrayList<>();
     private List<PickUp> pickUps = new ArrayList<>();
+    private List<Door> doors = new ArrayList<>();
+    private List<Guard> guards = new ArrayList<>();
     private boolean key_picked_up = false;
     private Sphere shieldVisual;
     public boolean isKey_picked_up() {
@@ -44,6 +44,10 @@ public class DungeonRunner extends Application {
     private int[] exit = {0, 0};
     public List<Trap> getTraps() {
         return traps;
+    }
+
+    public List<Door> getDoors() {
+        return doors;
     }
 
     private boolean key_picked_up_next = false;
@@ -59,38 +63,6 @@ public class DungeonRunner extends Application {
 
     }
 
-    private PhongMaterial wallMaterial = new PhongMaterial ( );
-
-    private MeshView buildPillar(int column, int row) {
-        double cx = (double)column * 2.0 + 1.0;
-        double cz = (double)row * 2.0 + 1.0;
-        double s = 0.6;
-        double hy = 1.0;
-        float[] points = new float[]{
-                (float)cx, (float)(-hy), (float)cz,
-                (float)(cx - s), 0.0F, (float)(cz - s),
-                (float)(cx + s), 0.0F, (float)(cz - s),
-                (float)(cx + s), 0.0F, (float)(cz + s),
-                (float)(cx - s), 0.0F, (float)(cz + s),
-                (float)cx, (float)hy, (float)cz};
-        float[] texCoords = new float[]{
-                0.5F, 0.0F,
-                0.0F, 1.0F,
-                1.0F, 1.0F,
-                0.5F, 1.0F,
-                0.0F, 0.0F,
-                1.0F, 0.0F};
-        int[] faces = new int[]{0, 0, 2, 2, 1, 1, 0, 0, 3, 2, 2, 1, 0, 0, 4, 2, 3, 1, 0, 0, 1, 2, 4, 1, 5, 3, 1, 4, 2, 5, 5, 3, 2, 4, 3, 5, 5, 3, 3, 4, 4, 5, 5, 3, 4, 4, 1, 5};
-        TriangleMesh mesh = new TriangleMesh();
-        mesh.getPoints().setAll(points);
-        mesh.getTexCoords().setAll(texCoords);
-        mesh.getFaces().setAll(faces);
-        MeshView view = new MeshView(mesh);
-        view.setMaterial(this.wallMaterial);
-        view.setCullFace(CullFace.NONE);
-        return view;
-    }
-
     Color c = Color.rgb(
             (int)(Constants.POINT_LIGHT_COLOR.getRed() * 255),
             (int)(Constants.POINT_LIGHT_COLOR.getGreen() * 255),
@@ -104,6 +76,52 @@ public class DungeonRunner extends Application {
 
     private double flickerPhase = 0;
     private int baseR, baseG, baseB;
+
+
+    private double lastHearthSpawn = 0;
+    private double lastShieldSpawn = 0;
+    private double lastPotionSpawn = 0;
+
+    private int[] freePosition() {
+        Random random = new Random();
+        List<int[]> emptySpaces = new ArrayList<>();
+        for (int r = 0; r < map.getRows(); r++) {
+            for (int c = 0; c < map.getCols(); c++) {
+                if (map.get(c, r) == Constants.EMPTY) {
+                    emptySpaces.add(new int[]{r, c});
+                }
+            }
+        }
+        if (emptySpaces.isEmpty()) return null;
+        return emptySpaces.get(random.nextInt(emptySpaces.size()));
+    }
+
+    public void spawn_hearth() {
+        int[] pos = freePosition();
+        if (pos == null) return;
+
+        Hearth h = new Hearth(pos[1], pos[0]); // (column,row)
+        world.getChildren().add(h.getHearth());
+        pickUps.add(h);
+    }
+
+    public void spawn_shield() {
+        int[] pos = freePosition();
+        if (pos == null) return;
+
+        Shield s = new Shield(pos[0], pos[1]);
+        world.getChildren().add(s.getShield());
+        pickUps.add(s);
+    }
+
+    public void spawn_potion() {
+        int[] pos = freePosition();
+        if (pos == null) return;
+
+        Potion p = new Potion(pos[1], pos[0]);
+        world.getChildren().add(p.getNode());
+        pickUps.add(p);
+    }
 
     private class tourch_light_animation extends AnimationTimer {
         private long lastTime = 0;
@@ -122,163 +140,18 @@ public class DungeonRunner extends Application {
     }
     private long start = 0;
     private double time = 0;
-    private void buildDungeon ( ) {
 
-        wallMaterial.setDiffuseColor ( Constants.WALL_DIFFUSE_COLOR );
-        wallMaterial.setSpecularColor ( Constants.WALL_SPECULAR_COLOR );
-        wallMaterial.setDiffuseMap(new Image(DungeonRunner.class.getResourceAsStream ("/com/example/begiztamnice/bricks.jpg")));
-        PhongMaterial exitMaterial = new PhongMaterial();
-        exitMaterial.setDiffuseColor ( Constants.EXIT_DIFFUSE_COLOR );
-        exitMaterial.setSpecularColor ( Constants.EXIT_SPECULAR_COLOR );
-
-        PhongMaterial floorMaterial = new PhongMaterial();
-        floorMaterial.setDiffuseColor(Color.rgb(60, 40, 20));
-
-        PhongMaterial ceilingMaterial = new PhongMaterial();
-        ceilingMaterial.setDiffuseColor(Color.rgb(25, 25, 45));
-
-        this.map = new DungeonMap ( Constants.CURRENT_MAP );
-
-
-        int    rows       = this.map.getRows ( );
-        int    columns    = this.map.getCols ( );
-        double totalWidth = columns * Constants.CELL_SIZE;
-        double totalDepth = rows * Constants.CELL_SIZE;
-
-        Box floor = new Box ( totalWidth, Constants.SLAB_THICKNESS, totalDepth );
-        Translate floorTranslate = new Translate (
-                totalWidth / 2.0,
-                Constants.WALL_HEIGHT / 2.0 + Constants.SLAB_THICKNESS / 2.0,
-                totalDepth / 2.0
-        );
-        floor.getTransforms ( ).add ( floorTranslate );
-        floor.setMaterial ( floorMaterial );
-
-        Box ceiling = new Box ( totalWidth, Constants.SLAB_THICKNESS, totalDepth );
-        Translate ceilingTranslate = new Translate (
-                totalWidth / 2.0,
-                -Constants.WALL_HEIGHT / 2.0 - Constants.SLAB_THICKNESS / 2.0,
-                totalDepth / 2.0
-        );
-        ceiling.getTransforms ( ).add ( ceilingTranslate );
-        ceiling.setMaterial ( ceilingMaterial );
-        tourch_light_animation t = new tourch_light_animation();
-        t.start();
-        this.world.getChildren ( ).addAll ( floor, ceiling );
-
-        for ( int row = 0; row < rows; row++ ) {
-            for ( int column = 0; column < columns; column++ ) {
-                int tile = this.map.get ( column, row );
-                if ( tile == Constants.WALL || tile == Constants.EXIT ) {
-                    Box wall = new Box ( Constants.CELL_SIZE, Constants.WALL_HEIGHT, Constants.CELL_SIZE );
-
-                    Translate wallTranslate = new Translate (
-                            column * Constants.CELL_SIZE + Constants.CELL_SIZE / 2.0,
-                            0,
-                            row * Constants.CELL_SIZE + Constants.CELL_SIZE / 2.0
-                    );
-                    wall.getTransforms ( ).add ( wallTranslate );
-                    wall.setMaterial (  wallMaterial );
-                    if(tile==Constants.EXIT){exit[0] = row ; exit[1] = column;}
-                    this.world.getChildren().add ( wall );
-                } else if (tile == Constants.OCT) {
-                    this.world.getChildren().add(buildPillar(column,row));
-                } else if (tile == Constants.SPIKE) {
-                    Spikes s = new Spikes(column,row);
-                    traps.add( s );
-                    this.world.getChildren().add(s.getSpikes());
-                } else if (tile == Constants.KEY) {
-                    Key key = new Key(row,column);
-                    this.keys.add(key);
-                    this.world.getChildren().add(key.getKey());
-                } else if (tile == Constants.START) {
-                    this.player = new Player ( row+0.5, column +0.5 );
-                }
-            }
-        }
-        Potion s = new Potion(1,1);
-        pickUps.add(s);
-        this.world.getChildren().add(s.getNode());
-    }
-
-    private Group minimap;
-    private Circle playerMarker;
-    private Line directionLine;
-    private Circle keyMarker;
-    private Circle exitMarker;
-
-    private void createMinimap(){
-        minimap = new Group();
-        double cell = 15;
-        Rectangle background = new Rectangle(map.getCols() * cell + 10, map.getRows() * cell + 10);
-        background.setFill(Color.rgb(0,0,0,0.55));
-        background.setStroke(Color.WHITE);
-        minimap.getChildren().add(background);
-        for(int y = 0; y < map.getRows(); y++){
-            for(int x = 0; x < map.getCols(); x++){
-                Rectangle tile = new Rectangle(x * cell + 5, y * cell + 5, cell, cell);
-                int value = map.get(x,y);
-                if(value == Constants.WALL || value == Constants.EXIT ){
-                    tile.setFill(Color.DARKGRAY);
-                }
-                else{
-                    tile.setFill(Color.TRANSPARENT);
-                }
-                tile.setStroke(Color.rgb(70,70,70));
-                minimap.getChildren().add(tile);
-                if(value == Constants.KEY){
-                    keyMarker = new Circle(
-                            x * cell + cell/2 + 5,
-                            y * cell + cell/2 + 5,
-                            3,
-                            Color.YELLOW
-                    );
-                    minimap.getChildren().add(keyMarker);
-                }
-                if(value == Constants.EXIT){
-                    exitMarker = new Circle(x * cell + cell/2 + 5, y * cell + cell/2 + 5, 3, Color.GREEN);
-                }
-
-            }
-        }
-
-
-
-        playerMarker = new Circle(0, 0, 4, Color.WHITE);
-
-
-        directionLine = new Line();
-        directionLine.setStroke(Color.WHITE);
-        directionLine.setStrokeWidth(2);
-
-        minimap.getChildren().addAll(directionLine, playerMarker);
-        minimap.setTranslateX(Constants.SCREEN_WIDTH - map.getCols()*cell - 30);
-        minimap.setTranslateY(Constants.SCREEN_HEIGHT - map.getRows()*cell - 30);
-    }
-
-
-    private void updateMinimap(){
-        double cell = 15;
-        double x = player.getPositionX() * cell + 5;
-        double y = player.getPositionY() * cell + 5;
-        playerMarker.setCenterX(x);
-        playerMarker.setCenterY(y);
-        directionLine.setStartX(x);
-        directionLine.setStartY(y);
-        directionLine.setEndX(x + player.getDirectionX()*10);
-        directionLine.setEndY(y + player.getDirectionY()*10);
-    }
     private void updateLight(double dt) {
-        flickerPhase += dt;
+        flickerPhase += dt * 10E-9 ;
 
         double flicker = 0.55 * Math.sin(flickerPhase * 1.7)
                 + 0.30 * Math.sin(flickerPhase * 4.1 + 1.3)
                 + 0.15 * Math.sin(flickerPhase * 9.7 + 2.6);
+
         double intensity = 0.5 + 0.6 * flicker;
-        int r = (int) Math.clamp(baseR * intensity, 0, 255);
-        int g = (int) Math.clamp(baseG * intensity, 0, 255);
-        int b = (int) Math.clamp(baseB * intensity, 0, 255);
-        c = Color.rgb(r, g, b);
+
+        c = Constants.POINT_LIGHT_COLOR.deriveColor(0, 1.0, intensity, 1.0);
+
         this.torch.setColor(c);
     }
     private void setupLighting ( ) {
@@ -317,6 +190,24 @@ public class DungeonRunner extends Application {
                 }
                 case LEFT: {
                     this.player.setRotateLeft ( true );
+                    break;
+                }
+                case E:
+                {
+                    int [] a = player.activateNearbySwitch(switches);
+
+                    if(a!=null){
+
+                        for(Door d:doors){
+
+                            if(d.getRow()==a[0] &&
+                                    d.getCol()==a[1]){
+
+                                d.open();
+                                break;
+                            }
+                        }
+                    }
                     break;
                 }
                 case RIGHT: {
@@ -376,16 +267,23 @@ public class DungeonRunner extends Application {
     }
 
 
-    private Text timeText;
-    private Text healthText;
     @Override
     public void start ( Stage stage ) {
-
         this.world = new Group ( );
-        buildDungeon ( );
+        map = new DungeonMap(Constants.CURRENT_MAP);
+        generateSwitches();
+        DungeonBuilder builder =
+                new DungeonBuilder(map, world, traps, keys, switches, doors);
+        player = builder.build();
+        var patrol1 = List.of(Constants.GUARD_PATHS[Constants.index][0]);
+        guards.add(new Guard(patrol1, 1.2)); // 1.2 celije/sekundi
+        for(Guard g : guards){
+            world.getChildren().add(g.getNode());
+        }
+        System.out.println(world.getChildren().size());
+        exit = builder.getExit();
         setupLighting ( );
         setupCamera ( );
-        createMinimap();
         SubScene gamescene = new SubScene (
                 this.world,
                 Constants.SCREEN_WIDTH,
@@ -397,61 +295,86 @@ public class DungeonRunner extends Application {
 
         setupInput ( gamescene );
 
-        Group hudtimer = new Group();
-
-
-        Group hudhealth = new Group();
-
-        Group hudmap = new Group();
-        hudmap.getChildren().add(minimap);
-
-
         this.timer = new AnimationTimer ( ) {
 
             long last = 0;
             long last_update = 0;
             long start_time = 0;
+
             @Override
-            public void handle ( long now ) {
-                if (start_time ==0){
+            public void handle(long now) {
+                if (start_time == 0) {
                     start_time = now;
-                    last = now ;
+                    last = now;
                 }
 
                 time = (now - start_time) * 1E-9;
-                player.update ( DungeonRunner.this );
+                player.update(DungeonRunner.this);
 
-                updateCameraMount ( );
-                updateTorch ( );
-                if((now - last_update) * 1E-9 > 3){
+                updateCameraMount();
+                updateTorch();
+                minimap.update(player);
+                if ((now - last_update) * 1E-9 > 3) {
                     updateTraps(now - last_update);
                     last_update = now;
                     player.update(DungeonRunner.this);
                 }
-                updateHud( );
-                if ( !gameOver && player.getHp() <= 0 ) {
+                hud.update(time, player.getHp());
+                if (!gameOver && player.getHp() <= 0) {
                     gameOver = true;
-                    timer.stop ( );
-                    showEndMessage("Izgubili ste!");
+                    timer.stop();
+                    hud.showEndMessage("Izgubili ste!");
                 }
 
-                if ( !gameOver && player.isAtExit ( DungeonRunner.this ) ) {
+                if (!gameOver && player.isAtExit(DungeonRunner.this)) {
                     gameOver = true;
-                    timer.stop ( );
-                    showEndMessage("Pobegli ste!");
+                    timer.stop();
+                    hud.showEndMessage("Pobegli ste!");
                 }
 
 
-                if ( player.isAtExit ( DungeonRunner.this ) ) {
-                    timer.stop ( );
+                if (player.isAtExit(DungeonRunner.this)) {
+                    timer.stop();
                 }
-                double dt = (now - last)*1E-9;
-                for(Key k : keys) {
+                double dt = (now - last) * 1E-9;
+                for (Key k : keys) {
                     k.update(dt);
                 }
-                for (PickUp p : pickUps){
-                    p.update(dt , player);
-                    if(p.isPicked_up()){
+
+                if (time - lastHearthSpawn >= 5 && pickUps.stream().filter(p -> p instanceof Hearth).count() < 2) {
+                    spawn_hearth();
+                    lastHearthSpawn = time;
+                }
+
+                if (time - lastShieldSpawn >= 5 && pickUps.stream().filter(p -> p instanceof Shield).count() < 2) {
+                    spawn_shield();
+                    lastShieldSpawn = time;
+                }
+
+                if (time - lastPotionSpawn >= 5 && pickUps.stream().filter(p -> p instanceof Potion).count() < 2) {
+                    spawn_potion();
+                    lastPotionSpawn = time;
+                }
+
+                for (Key k : keys) {
+                    k.update(dt);
+                }
+
+                for(Guard g : guards){
+                    g.update(dt);
+
+                    if(!player.isShielded() &&
+                            g.collidesWith(player.getPositionX(), player.getPositionY(), Constants.PLAYER_RADIUS + 0.3)){
+
+                        player.hp_decrease();
+                        player.resetToStart();
+                        break;
+                    }
+                }
+
+                for (PickUp p : pickUps) {
+                    p.update(dt, player);
+                    if (p.isPicked_up()) {
                         pickUps.remove(p);
                         world.getChildren().remove(p.getHitBox());
                         if (p instanceof Shield) {
@@ -464,76 +387,30 @@ public class DungeonRunner extends Application {
                 player.updateShield(dt);
                 updateShieldVisual();
                 last = now;
-                if(key_picked_up != key_picked_up_next){
+                tourch_light_animation t = new tourch_light_animation();
+                t.start();
+                if (key_picked_up != key_picked_up_next) {
                     updateExit();
                     key_picked_up = key_picked_up_next;
-                    if(keyMarker != null){
-                        minimap.getChildren().remove(keyMarker);
-                    }
-
-
-                    if(exitMarker != null){
-                        minimap.getChildren().add(exitMarker);
-                    }
+                    minimap.removeKey();
+                    minimap.showExit();
+                    minimap.update(player);
                 }
-                updateMinimap();
             }
         };
 
 
-
-
         StackPane root = new StackPane();
         this.rootPane = root;
-        root.getChildren().addAll(gamescene, hudtimer, hudhealth,hudmap);
-
-        Scene scene = new Scene(
-                root,
-                Constants.SCREEN_WIDTH,
-                Constants.SCREEN_HEIGHT
-        );
-        timer.start ( );
 
 
-        /* BOX ZA VREME */
-        Rectangle timeBox = new Rectangle(140, 40);
-        timeBox.setArcWidth(10);
-        timeBox.setArcHeight(10);
-        timeBox.setFill(Color.rgb(50, 50, 50, 0.4));
-        timeBox.setStroke(Color.WHITE);
+        minimap = new Minimap(map);
+        root.getChildren().addAll(gamescene, minimap.getNode());
 
-        Rectangle healthBox = new Rectangle(80, 40);
-        healthBox.setArcWidth(10);
-        healthBox.setArcHeight(10);
-        healthBox.setFill(Color.rgb(50, 50, 50, 0.4));
-        healthBox.setStroke(Color.WHITE);
+        hud = new HudManager(root);
+        Scene scene = new Scene(root, Constants.SCREEN_WIDTH, Constants.SCREEN_HEIGHT);
+        timer.start();
 
-
-
-        timeText = new Text("Time: 00:00");
-        timeText.setFont(Font.font(20));
-        timeText.setFill(Color.WHITE);
-
-        timeText.setTranslateX(10);
-        timeText.setTranslateY(25);
-
-        healthText = new Text("HP: 3");
-        healthText.setFont(Font.font(20));
-        healthText.setFill(Color.WHITE);
-
-        healthText.setTranslateX(10);
-        healthText.setTranslateY(25);
-
-
-        hudtimer.setTranslateX((double) Constants.SCREEN_WIDTH /2 - timeBox.getWidth()/2 - 10);
-        hudtimer.setTranslateY((double) -Constants.SCREEN_HEIGHT /2 + timeBox.getHeight()/2 + 10);
-        hudtimer.getChildren().addAll(timeBox, timeText, healthBox ,healthText);
-
-        hudhealth.setTranslateX((double) -Constants.SCREEN_WIDTH /2 + healthBox.getWidth()/2 + 10);
-        hudhealth.setTranslateY((double) -Constants.SCREEN_HEIGHT /2 + healthBox.getHeight()/2 + 10);
-        hudhealth.getChildren().addAll(healthBox,healthText);
-
-        hudmap.setTranslateY(Constants.SCREEN_HEIGHT/2 - minimap.getChildren().size());
         stage.setTitle ( "Beg iz tamnice" );
         stage.setScene ( scene );
         stage.setResizable ( false );
@@ -541,18 +418,6 @@ public class DungeonRunner extends Application {
         gamescene.requestFocus();
     }
 
-    private void showEndMessage(String message) {
-        StackPane overlay = new StackPane();
-        Rectangle bg = new Rectangle(Constants.SCREEN_WIDTH, Constants.SCREEN_HEIGHT);
-        bg.setFill(Color.rgb(0, 0, 0, 0.6));
-
-        Text msg = new Text(message);
-        msg.setFont(Font.font(40));
-        msg.setFill(Color.WHITE);
-
-        overlay.getChildren().addAll(bg, msg);
-        rootPane.getChildren().add(overlay);
-    }
 
     private void activatePlayerShield(double durationSeconds) {
         player.activateShield(durationSeconds);
@@ -607,10 +472,113 @@ public class DungeonRunner extends Application {
         wall.setMaterial ( exitMaterial );
         this.world.getChildren().add ( wall );
     }
-    private void updateHud() {
-        String time_txt = String.format("Time: %.2f" , time );
-        timeText.setText( time_txt );
-        healthText.setText("HP: " + player.getHp());
+
+
+    private static class Point{
+
+        int row;
+        int col;
+
+        Point(int row,int col){
+            this.row=row;
+            this.col=col;
+        }
+
+        @Override
+        public boolean equals(Object o){
+            if(this==o) return true;
+            if(!(o instanceof Point)) return false;
+            Point p=(Point)o;
+            return row==p.row && col==p.col;
+        }
+
+        @Override
+        public int hashCode(){
+            return Objects.hash(row,col);
+        }
     }
 
+    private List<Point> reachableCells(DungeonMap map,
+                                       int startRow,
+                                       int startCol,
+                                       Set<Point> openedDoors) {
+
+        List<Point> result = new ArrayList<>();
+        Queue<Point> q = new LinkedList<>();
+        boolean[][] visited = new boolean[map.getRows()][map.getCols()];
+        q.add(new Point(startRow,startCol));
+        visited[startRow][startCol] = true;
+        int[] dr = {-1,1,0,0};
+        int[] dc = {0,0,-1,1};
+        while(!q.isEmpty()){
+            Point cur = q.poll();
+            if(map.get(cur.col,cur.row) == Constants.EMPTY) {
+                result.add(cur);
+            }
+            for(int i=0;i<4;i++){
+                int nr = cur.row + dr[i];
+                int nc = cur.col + dc[i];
+                if(nr < 0 || nr >= map.getRows()
+                        || nc < 0 || nc >= map.getCols())
+                    continue;
+
+
+                if(visited[nr][nc])
+                    continue;
+
+
+                int tile = map.get(nc,nr);
+
+
+                if(tile == Constants.WALL)
+                    continue;
+
+
+                if(tile == Constants.DOOR &&
+                        !openedDoors.contains(new Point(nr,nc)))
+                    continue;
+
+
+                visited[nr][nc] = true;
+                q.add(new Point(nr,nc));
+            }
+        }
+
+
+        return result;
+    }
+
+    public void generateSwitches(){
+        Random random = new Random();
+        int[] start = map.findStart();
+        Set<Point> openedDoors = new HashSet<>();
+        for(int r=0;r<map.getRows();r++){
+            for(int c=0;c<map.getCols();c++){
+                if(map.get(c,r)!=Constants.DOOR)
+                    continue;
+                List<Point> available = reachableCells(map, start[0], start[1], openedDoors);
+
+                available.removeIf(p -> !map.hasNearbyWall(p.row,p.col));
+
+                if(available.isEmpty())
+                    throw new RuntimeException("Nema mesta za switch");
+
+
+                Point p = available.get(random.nextInt(available.size()));
+                Switch sw =
+                        new Switch(p.row, p.col, r, c, map);
+                switches.add(sw);
+                map.set(
+                        p.col,
+                        p.row,
+                        Constants.SWITCH
+                );
+
+
+                openedDoors.add(
+                        new Point(r,c)
+                );
+            }
+        }
+    }
 }

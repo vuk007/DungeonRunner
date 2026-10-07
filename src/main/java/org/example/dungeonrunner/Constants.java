@@ -10,7 +10,8 @@ public class Constants {
     public static final int SPIKE  = 4;
     public static final int KEY  = 5;
     public static final int START = 6;
-
+    public static final int DOOR = 7;
+    public static final int SWITCH = 8;
     public static final int[][] MAP1 = {
             {1,1,1,1,1,1,1,1,1},
             {1,4,6,5,1,0,0,0,1},
@@ -18,7 +19,7 @@ public class Constants {
             {1,0,1,1,1,0,1,0,1},
             {1,0,0,0,0,0,0,0,1},
             {1,1,1,0,1,1,0,1,1},
-            {1,0,0,0,3,0,0,2,1},
+            {1,0,0,0,7,0,0,2,1},
             {1,1,1,1,1,1,1,1,1},
     };
 
@@ -44,12 +45,29 @@ public class Constants {
             {1,1,1,1,1,1,1},
     };
 
+
+    public static final int[][][] GUARD_PATHS_MAP1 = {
+            {{4,1}, {4,7}},
+            {{6,1}, {6,3}}
+    };
+
+    public static final int[][][] GUARD_PATHS_MAP2 = {
+            {{5,1}, {5,8}},
+            {{1,7}, {5,7}}
+    };
+
+    public static final int[][][] GUARD_PATHS_MAP3 = {
+            {{1,2}, {1,5}},
+            {{5,2}, {5,4}}
+    };
+    public static final int[][][][] GUARD_PATHS = { GUARD_PATHS_MAP1, GUARD_PATHS_MAP2, GUARD_PATHS_MAP3 };
+
     public static final int[][][] MAPS = { MAP1, MAP2, MAP3 };
     public static final String[] MAP_NAMES = { "Tamnica I", "Tamnica II", "Tamnica III" };
 
     // ovo se postavlja u MainMenu pre pokretanja igre
     public static int[][] CURRENT_MAP = MAP1;
-
+    public static int index = 0;
     public static final int SCREEN_WIDTH  = 1000;
     public static final int SCREEN_HEIGHT = 800;
 
@@ -69,8 +87,7 @@ public class Constants {
     public static final double CAMERA_FAR_CLIP      = 500.0;
     public static final double CAMERA_FIELD_OF_VIEW = 75.0;
 
-    public static final double PLAYER_START_X        = 3.5;
-    public static final double PLAYER_START_Y        = 2.5;
+
     public static final double PLAYER_MOVE_SPEED     = 0.005*2;
     public static final double PLAYER_ROTATION_SPEED = 0.01*2;
     public static final double PLAYER_RADIUS         = 0.25;

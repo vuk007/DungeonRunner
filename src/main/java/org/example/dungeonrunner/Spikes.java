@@ -101,7 +101,6 @@ public class Spikes implements Trap{
     }
     @Override
     public void update(long dt) {
-        System.out.println("AAAAA");
         if(up){
             up = false;
             spikes.setTranslateY(30);

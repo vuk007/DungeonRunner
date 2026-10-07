@@ -5,6 +5,8 @@ import javafx.geometry.Point2D;
 import javafx.scene.shape.Cylinder;
 import javafx.scene.transform.Rotate;
 
+import java.util.List;
+
 public class Player {
     private double positionX;
     private double startX;
@@ -91,9 +93,9 @@ public class Player {
     }
     private boolean canMoveTo ( double x, double y, DungeonRunner game ) {
         return isFree ( ( int ) ( x + Constants.PLAYER_RADIUS ), ( int ) ( y + Constants.PLAYER_RADIUS ), game )
-            && isFree ( ( int ) ( x + Constants.PLAYER_RADIUS ), ( int ) ( y - Constants.PLAYER_RADIUS ), game )
-            && isFree ( ( int ) ( x - Constants.PLAYER_RADIUS ), ( int ) ( y + Constants.PLAYER_RADIUS ), game )
-            && isFree ( ( int ) ( x - Constants.PLAYER_RADIUS ), ( int ) ( y - Constants.PLAYER_RADIUS ), game );
+                && isFree ( ( int ) ( x + Constants.PLAYER_RADIUS ), ( int ) ( y - Constants.PLAYER_RADIUS ), game )
+                && isFree ( ( int ) ( x - Constants.PLAYER_RADIUS ), ( int ) ( y + Constants.PLAYER_RADIUS ), game )
+                && isFree ( ( int ) ( x - Constants.PLAYER_RADIUS ), ( int ) ( y - Constants.PLAYER_RADIUS ), game );
     }
 
     private boolean isFree ( int x, int y, DungeonRunner game ) {
@@ -103,8 +105,7 @@ public class Player {
             for(Trap t : game.getTraps()){
                 if(t.getColumn() == x && t.getRow() == y && t.getY() == 0){
                     if (!shielded) {
-                        positionX = startX;
-                        positionY = startY;
+                        resetToStart();
                         hp_decrease();
                         return false;
                     }
@@ -114,11 +115,16 @@ public class Player {
             return true;
         } else if (tile == Constants.EXIT && !game.isKey_picked_up()) {
             return false;
+        } else if (tile == Constants.DOOR) {
+            List<Door> doors = game.getDoors();
+            System.out.println("USAO");
+            for (Door d : doors)if(d.getRow()==y && d.getCol() == x && d.isOpen())return true;
+            return false;
         } else if (tile == Constants.KEY) {
             game.setKey_picked_up_next();
             return true;
         } else{
-            return tile == Constants.EMPTY || tile == Constants.EXIT||tile==Constants.START ;
+            return tile == Constants.EMPTY || tile == Constants.EXIT||tile==Constants.START || tile==Constants.SWITCH ;
         }
 
 
@@ -170,5 +176,27 @@ public class Player {
     public void heal(double healAmount) {
         this.hp += (int) healAmount;
         if(hp >= 3) hp = 3;
+    }
+
+    public void resetToStart(){
+        this.positionX = startX;
+        this.positionY = startY;
+    }
+    public int[] activateNearbySwitch(List<Switch> switches){
+
+        for(Switch sw : switches){
+            double dx = getPositionX() - (sw.getX()+0.5);
+            double dy = getPositionY() - (sw.getY()+0.5);
+            double distance = Math.sqrt(dx*dx + dy*dy);
+
+            if(distance < 1.0 ){
+                sw.activate();
+                int[] a = new int[2];
+                a [0] = sw.getDoorRow();
+                a [1] = sw.getDoorCol();
+                return a;
+            }
+        }
+        return null;
     }
 }

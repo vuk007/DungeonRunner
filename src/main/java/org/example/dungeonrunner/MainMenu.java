@@ -82,6 +82,7 @@ public class MainMenu extends Application {
 
     private void startGame(Stage stage) {
         Constants.CURRENT_MAP = Constants.MAPS[selectedIndex];
+        Constants.index = selectedIndex;
         DungeonRunner game = new DungeonRunner();
         game.start(stage); // reciklira isti stage, igra preuzima scenu
     }
